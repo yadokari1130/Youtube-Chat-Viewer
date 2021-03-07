@@ -1,0 +1,9 @@
+{
+        "homepage": "https://forum.civa.jp/viewtopic.php?f=3&t=680",
+        "promos": {
+                "1.12.2-latest": "1.0"
+        },
+        "1.12.2": {
+        	"1.0": "MODをリリース",
+        }
+}
