@@ -82,7 +82,7 @@ public class YCV {
 	@SideOnly(Side.CLIENT)
 	@SubscribeEvent
 	public void onJoinWorld(EntityJoinWorldEvent event) {
-		if (Minecraft.getMinecraft().player != null) {
+		if (Minecraft.getMinecraft().player != null && event.getEntity().equals(Minecraft.getMinecraft().player)) {
 			EntityPlayer player = Minecraft.getMinecraft().player;
 			this.player = player;
 			this.playerName = player.getName();
