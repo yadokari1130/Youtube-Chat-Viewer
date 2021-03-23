@@ -1,9 +1,10 @@
 {
         "homepage": "https://forum.civa.jp/viewtopic.php?f=3&t=680",
         "promos": {
-                "1.12.2-latest": "1.0"
+                "1.12.2-latest": "1.1"
         },
         "1.12.2": {
+        	"1.1": "チャット投稿機能の追加",
         	"1.0": "MODをリリース"
         }
 }

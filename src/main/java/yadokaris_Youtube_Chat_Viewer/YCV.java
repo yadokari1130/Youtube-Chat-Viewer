@@ -36,11 +36,13 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 public class YCV {
 
 	static String playerName;
-	public static EntityPlayer player;
+	static EntityPlayer player;
 	static final String version = "1.0";
 	static String path;
 	static Properties prop = new Properties();
 	private static boolean isNotificated = false;
+	static Browser browser;
+	static YoutubeCookie cookie;
 
 	@EventHandler
 	public void preInit(FMLPreInitializationEvent event) {
@@ -64,8 +66,14 @@ public class YCV {
 		}
 
 		if (prop.containsKey("channelID")) ConfigCommand.channelID = prop.getProperty("channelID");
+		if (prop.containsKey("browser") && !prop.get("browser").equals("none")) {
+			browser = Browser.getBrowser(prop.getProperty("browser"));
+			cookie = new YoutubeCookie(browser);
+			ConfigCommand.isLogin = true;
+		}
 
 		ClientCommandHandler.instance.registerCommand(new ConfigCommand());
+		System.out.println(System.getProperty("file.encoding"));
 	}
 
 	@EventHandler
@@ -79,6 +87,7 @@ public class YCV {
 		writer.flush();
 	}
 
+	@SuppressWarnings("unchecked")
 	@SideOnly(Side.CLIENT)
 	@SubscribeEvent
 	public void onJoinWorld(EntityJoinWorldEvent event) {

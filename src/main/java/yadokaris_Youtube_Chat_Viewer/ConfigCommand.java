@@ -14,11 +14,16 @@ import com.github.kusaanko.youtubelivechat.IdType;
 import com.github.kusaanko.youtubelivechat.YouTubeLiveChat;
 import com.google.gson.Gson;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.PositionedSoundRecord;
+import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommand;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.Style;
@@ -32,9 +37,12 @@ public class ConfigCommand implements ICommand, Runnable {
 	private static String liveID = "";
 	private static boolean isClientMode = true;
 	private static boolean isView = false;
-	private static String URL = "";
-	private static YouTubeLiveChat chat = null;
+	static YouTubeLiveChat chat = null;
 	private static long startTime = 0;
+	static boolean isLogin = false;
+	private static String id;
+	private static boolean isTopOnly = true;
+	private static IdType type;
 	private static Map<Color, String> colors = new HashMap<Color, String>() {{
 		put(new Color(0x000000), "black");
 		put(new Color(0x000080), "dark_blue");
@@ -66,7 +74,7 @@ public class ConfigCommand implements ICommand, Runnable {
 
 	@Override
 	public String getUsage(ICommandSender sender) {
-		return "/ycv < channel | live | locale | start | end > < channel id | live id | locale | mode > <id type> <is top chat>";
+		return "/ycv < channel | live | start | end > < channel id | live id | mode > <id type> <is top chat>";
 	}
 
 	@Override
@@ -82,7 +90,7 @@ public class ConfigCommand implements ICommand, Runnable {
 			if (args[0].equals("stop")) {
 				isView = false;
 				chat = null;
-				YCV.player.sendMessage(new TextComponentString("Chat stopped").setStyle(new Style().setColor(TextFormatting.GREEN)));
+				sender.sendMessage(new TextComponentString("Chat stopped").setStyle(new Style().setColor(TextFormatting.GREEN)));
 			}
 			else if (args[0].equals("channel")) {
 				YCV.prop.setProperty("channelID", args[1]);
@@ -92,7 +100,7 @@ public class ConfigCommand implements ICommand, Runnable {
 				}
 				catch (IOException e) {
 					e.printStackTrace();
-					sender.sendMessage(new TextComponentString("Failed to set the channel").setStyle(new Style().setColor(TextFormatting.GREEN)));
+					sender.sendMessage(new TextComponentString("Failed to set the channel").setStyle(new Style().setColor(TextFormatting.RED)));
 					return;
 				}
 				sender.sendMessage(new TextComponentString("Set the channel").setStyle(new Style().setColor(TextFormatting.GREEN)));
@@ -110,8 +118,6 @@ public class ConfigCommand implements ICommand, Runnable {
 					return;
 				}
 
-				String id = "";
-				IdType type = null;
 				if (args[2].equals("channel")) {
 					id = channelID;
 					type = IdType.CHANNEL;
@@ -125,7 +131,6 @@ public class ConfigCommand implements ICommand, Runnable {
 					return;
 				}
 
-				boolean isTopOnly = false;
 				if (args[3].equals("true")) isTopOnly = true;
 				else if (args[3].equals("false")) isTopOnly = false;
 				else {
@@ -136,6 +141,7 @@ public class ConfigCommand implements ICommand, Runnable {
 				try {
 					chat = new YouTubeLiveChat(id, isTopOnly, type);
 					chat.setLocale(MinecraftForgeClient.getLocale());
+					if(isLogin) chat.setUserData(YCV.cookie.getIDs());
 					isView = true;
 				}
 				catch (IOException | IllegalArgumentException e) {
@@ -147,7 +153,103 @@ public class ConfigCommand implements ICommand, Runnable {
 				startTime = System.currentTimeMillis();
 
 				new Thread(this).start();
-				YCV.player.sendMessage(new TextComponentString("Chat started").setStyle(new Style().setColor(TextFormatting.GREEN)));
+				sender.sendMessage(new TextComponentString("Chat started").setStyle(new Style().setColor(TextFormatting.GREEN)));
+			}
+			else if (args[0].equals("restart")) {
+				chat = null;
+				isView = false;
+
+				try {
+					chat = new YouTubeLiveChat(id, isTopOnly, type);
+					chat.setLocale(MinecraftForgeClient.getLocale());
+					if(isLogin) chat.setUserData(YCV.cookie.getIDs());
+					isView = true;
+				}
+				catch (IOException | IllegalArgumentException e) {
+					sender.sendMessage(new TextComponentString("Invalid ID").setStyle(new Style().setColor(TextFormatting.RED)));
+					e.printStackTrace();
+					return;
+				}
+
+				startTime = System.currentTimeMillis();
+
+				new Thread(this).start();
+				sender.sendMessage(new TextComponentString("Chat restarted").setStyle(new Style().setColor(TextFormatting.GREEN)));
+			}
+			else if (args[0].equals("login")) {
+				try {
+					YCV.cookie = new YoutubeCookie(Browser.getBrowser(args[1]));
+					if (!YCV.cookie.hasAllIds()) {
+						YCV.cookie = null;
+						sender.sendMessage(new TextComponentString("Failed to get authorization info").setStyle(new Style().setColor(TextFormatting.RED)));
+						sender.sendMessage(new TextComponentString("Please login with the browser").setStyle(new Style().setColor(TextFormatting.RED)));
+						return;
+					}
+					if (isView) chat.setUserData(YCV.cookie.getIDs());
+					startTime = System.currentTimeMillis();
+				}
+				catch (IllegalArgumentException e) {
+					sender.sendMessage(new TextComponentString("Invalid browser name").setStyle(new Style().setColor(TextFormatting.RED)));
+				}
+
+				YCV.prop.setProperty("browser", args[1].toLowerCase());
+				try {
+					YCV.saveProperties();
+				}
+				catch (IOException e) {
+					e.printStackTrace();
+					sender.sendMessage(new TextComponentString("Failed to set the browser").setStyle(new Style().setColor(TextFormatting.RED)));
+					return;
+				}
+
+				isLogin = true;
+				sender.sendMessage(new TextComponentString("Logged in").setStyle(new Style().setColor(TextFormatting.GREEN)));
+			}
+			else if (args[0].equals("logout")) {
+				YCV.cookie = null;
+
+				YCV.prop.setProperty("browser", "none");
+				try {
+					YCV.saveProperties();
+				}
+				catch (IOException e) {
+					e.printStackTrace();
+					sender.sendMessage(new TextComponentString("Failed to save").setStyle(new Style().setColor(TextFormatting.RED)));
+					return;
+				}
+
+				isLogin = false;
+				sender.sendMessage(new TextComponentString("Logged out").setStyle(new Style().setColor(TextFormatting.GREEN)));
+			}
+			else if (args[0].equals("c")) {
+				if (!isView) {
+					sender.sendMessage(new TextComponentString("You can send a message while displaying chat").setStyle(new Style().setColor(TextFormatting.RED)));
+					sender.sendMessage(new TextComponentString("Please start displaying chat using /ycv start <mode> <type> <isTopOnly>").setStyle(new Style().setColor(TextFormatting.RED)));
+					return;
+				}
+				if (!isLogin || YCV.cookie == null) {
+					sender.sendMessage(new TextComponentString("You need to login using /ycv login <browser>").setStyle(new Style().setColor(TextFormatting.RED)));
+					return;
+				}
+
+				new Thread(() -> {
+					try {
+						StringBuilder sb = new StringBuilder();
+						for (int i = 1; i < args.length; i++) {
+							sb.append(args[i] + " ");
+						}
+						System.out.println(sb.toString());
+						chat.sendMessage(sb.toString());
+					}
+					catch (IllegalStateException | IOException e) {
+						e.printStackTrace();
+						sender.sendMessage(new TextComponentString("Failed to send the message").setStyle(new Style().setColor(TextFormatting.RED)));
+					}
+				}).start();
+			}
+			else if (args[0].equals("test")) {
+				sender.sendMessage(new TextComponentString(args[1]));
+				System.out.println(args[1]);
 			}
 			else {
 				sender.sendMessage(new TextComponentString("Invalid argument").setStyle(new Style().setColor(TextFormatting.RED)));
@@ -207,9 +309,14 @@ public class ConfigCommand implements ICommand, Runnable {
 				//if (item.getType() != ChatItemType.PAID_MESSAGE) continue;
 				if (item.getAuthorType().contains(AuthorType.YOUTUBE)) continue;
 				List<AuthorType> authorTypes = item.getAuthorType();
+				ChatItemType chatType = item.getType();
 				String name = item.getAuthorName() == null ? "Error" : item.getAuthorName();
 				String message = item.getMessage() == null ? "" : item.getMessage();
-				if (item.getType() == ChatItemType.PAID_STICKER) message = "Super Sticker";
+				if (chatType == ChatItemType.PAID_STICKER) message = "Super Sticker";
+				if (chatType == ChatItemType.NEW_MEMBER_MESSAGE || chatType == ChatItemType.PAID_MESSAGE || chatType == ChatItemType.PAID_STICKER) {
+					SoundHandler handler = Minecraft.getMinecraft().getSoundHandler();
+					handler.playSound(PositionedSoundRecord.getRecord(new SoundEvent(new ResourceLocation("minecraft", "entity.player.levelup")), 0.5F, 0.3F));
+				}
 
 				if (isClientMode) {
 					ITextComponent text = new TextComponentString("<");
@@ -224,12 +331,12 @@ public class ConfigCommand implements ICommand, Runnable {
 
 					ITextComponent messageComponent = new TextComponentString(message);
 					Style messageStyle = new Style();
-					if (item.getType() == ChatItemType.PAID_MESSAGE) {
+					if (chatType == ChatItemType.PAID_MESSAGE) {
 						messageStyle.setColor(TextFormatting.getValueByName(getClosestColor(new Color(item.getBodyBackgroundColor()))));
 						text.appendSibling(messageComponent.setStyle(messageStyle));
 						text.appendSibling(new TextComponentString(" (" + item.getPurchaseAmount() + ")").setStyle(messageStyle));
 					}
-					else if (item.getType() == ChatItemType.PAID_STICKER) {
+					else if (chatType == ChatItemType.PAID_STICKER) {
 						messageStyle.setColor(TextFormatting.getValueByName(getClosestColor(new Color(item.getBackgroundColor()))));
 						text.appendSibling(messageComponent.setStyle(messageStyle));
 						text.appendSibling(new TextComponentString(" (" + item.getPurchaseAmount() + ")").setStyle(messageStyle));
@@ -258,14 +365,14 @@ public class ConfigCommand implements ICommand, Runnable {
 					sb.append(gson.toJson(temp) + ", ");
 
 					temp.put("text", message);
-					if (item.getType() == ChatItemType.PAID_MESSAGE) {
+					if (chatType == ChatItemType.PAID_MESSAGE) {
 						temp.put("color", getClosestColor(new Color(item.getBodyBackgroundColor())));
 						sb.append(gson.toJson(temp) + ", ");
 						temp.put("text", " (" + item.getPurchaseAmount() + ")");
 						temp.put("color", getClosestColor(new Color(item.getBodyBackgroundColor())));
 						sb.append(gson.toJson(temp) + ", ");
 					}
-					else if (item.getType() == ChatItemType.PAID_STICKER) {
+					else if (chatType == ChatItemType.PAID_STICKER) {
 						temp.put("color", getClosestColor(new Color(item.getBackgroundColor())));
 						sb.append(gson.toJson(temp) + ", ");
 						temp.put("text", " (" + item.getPurchaseAmount() + ")");
